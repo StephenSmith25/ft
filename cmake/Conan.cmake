@@ -21,6 +21,7 @@ macro(run_conan)
     catch2/2.13.3
     ceres-solver/2.0.0
     glog/0.4.0
+    pybind11/2.6.2
     OPTIONS
     ${CONAN_EXTRA_OPTIONS}
     BASIC_SETUP

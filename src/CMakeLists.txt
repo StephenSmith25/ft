@@ -1,4 +1,7 @@
 # Generic test that uses conan libs
+
+add_subdirectory(python)
+
 add_executable(intro main.cpp)
 target_link_libraries(
   intro
