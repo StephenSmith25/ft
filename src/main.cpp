@@ -1,41 +1,46 @@
-#include <functional>
-#include <iostream>
+#include "ceres/ceres.h"
+#include "glog/logging.h"
 
-#include <spdlog/spdlog.h>
-#include <docopt/docopt.h>
 
-static constexpr auto USAGE =
-  R"(Naval Fate.
-
-    Usage:
-          naval_fate ship new <name>...
-          naval_fate ship <name> move <x> <y> [--speed=<kn>]
-          naval_fate ship shoot <x> <y>
-          naval_fate mine (set|remove) <x> <y> [--moored | --drifting]
-          naval_fate (-h | --help)
-          naval_fate --version
- Options:
-          -h --help     Show this screen.
-          --version     Show version.
-          --speed=<kn>  Speed in knots [default: 10].
-          --moored      Moored (anchored) mine.
-          --drifting    Drifting mine.
-)";
-
-int main(int argc, const char **argv)
+using ceres::AutoDiffCostFunction;
+using ceres::CostFunction;
+using ceres::Problem;
+using ceres::Solve;
+using ceres::Solver;
+// A templated cost functor that implements the residual r = 10 -
+// x. The method operator() is templated so that we can then use an
+// automatic differentiation wrapper around it to generate its
+// derivatives.
+struct CostFunctor
 {
-  std::map<std::string, docopt::value> args = docopt::docopt(USAGE,
-    { std::next(argv), std::next(argv, argc) },
-    true,// show help if requested
-    "Naval Fate 2.0");// version string
-
-  for (auto const &arg : args) {
-    std::cout << arg.first << arg.second << std::endl;
+  template<typename T>
+  bool operator()(const T *const x, T *residual) const
+  {
+    residual[0] = 10.0 - x[0];
+    return true;
   }
-
-
-  //Use the default logger (stdout, multi-threaded, colored)
-  spdlog::info("Hello, {}!", "World");
-
-  fmt::print("Hello, from {}\n", "{fmt}");
+};
+int main(int argc, char **argv)
+{
+  google::InitGoogleLogging(argv[0]);
+  // The variable to solve for with its initial value. It will be
+  // mutated in place by the solver.
+  double x = 0.5;
+  const double initial_x = x;
+  // Build the problem.
+  Problem problem;
+  // Set up the only cost function (also known as residual). This uses
+  // auto-differentiation to obtain the derivative (jacobian).
+  CostFunction *cost_function =
+    new AutoDiffCostFunction<CostFunctor, 1, 1>(new CostFunctor);
+  problem.AddResidualBlock(cost_function, nullptr, &x);
+  // Run the solver!
+  Solver::Options options;
+  options.minimizer_progress_to_stdout = true;
+  Solver::Summary summary;
+  Solve(options, &problem, &summary);
+  std::cout << summary.BriefReport() << "\n";
+  std::cout << "x : " << initial_x << " -> " << x << "\n";
+  return 0;
 }
+
