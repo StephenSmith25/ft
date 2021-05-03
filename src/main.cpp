@@ -1,5 +1,6 @@
 // Author: sameeragarwal@google.com (Sameer Agarwal)
 #include "ceres/ceres.h"
+#include "ceres/covariance.h"
 #include "glog/logging.h"
 #include <unordered_map>
 #include <vector>
@@ -248,7 +249,7 @@ private:
 void gaussProblem()
 {
 
-  double parameters[] = { 10, 0.007, 0.2, 3 };
+  double parameters[4] = { 10, 0.007, 0.2, 3 };
   Problem problem;
   for (int i = 0; i < numGaussObservations; ++i) {
     problem.AddResidualBlock(
@@ -281,6 +282,22 @@ void gaussProblem()
   // meaning the final cost is half of the chi squared residual
   std::cout << "Chi squared: " << 2 * summary.final_cost << std::endl;
   std::cout << "Reduced Chi squared " << 2 * summary.final_cost / (summary.num_residual_blocks - summary.num_parameters);
+
+  ceres::Covariance::Options covoptions;
+  ceres::Covariance covariance(covoptions);
+  std::vector<std::pair<const double *, const double *>> covariance_blocks;
+  covariance_blocks.push_back(std::make_pair(parameters, parameters));
+  CHECK(covariance.Compute(covariance_blocks, &problem));
+  double covariance_xx[4 * 4];
+  covariance.GetCovarianceBlock(parameters, parameters, covariance_xx);
+  std::cout
+    << "cov[0,0]" << sqrt(covariance_xx[0]) << std::endl;
+  std::cout
+    << "cov[1,1]" << sqrt(covariance_xx[5]) << std::endl;
+  std::cout
+    << "cov[2,2]" << sqrt(covariance_xx[10]) << std::endl;
+  std::cout
+    << "cov[3,3]" << sqrt(covariance_xx[15]) << std::endl;
 }
 
 void testProblem()
