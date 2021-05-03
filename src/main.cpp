@@ -274,6 +274,13 @@ void gaussProblem()
   //  decay:      0.01046706 +/- 2.6689e-04 (2.55%) (init = 0.007)
   //  phase:      0.65216015 +/- 0.01395827 (2.14%) (init = 0.2)
   //  frequency:  2.85913672 +/- 0.00116664 (0.04%) (init = 3)
+  /// chi suqare
+  //chi-square         = 44.5627311
+  // reduced chi-square = 0.96875502
+  // here we solve the problem of minimizing 1/2 chi squared
+  // meaning the final cost is half of the chi squared residual
+  std::cout << "Chi squared: " << 2 * summary.final_cost << std::endl;
+  std::cout << "Reduced Chi squared " << 2 * summary.final_cost / (summary.num_residual_blocks - summary.num_parameters);
 }
 
 void testProblem()
@@ -304,5 +311,6 @@ int main(int argc, char **argv)
   google::InitGoogleLogging(argv[0]);
   // testProblem();
   gaussProblem();
+
   return 0;
 }
