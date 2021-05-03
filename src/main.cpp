@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <vector>
 #include <memory>
+#include "data.h"
 using ceres::AutoDiffCostFunction;
 using ceres::CostFunction;
 using ceres::Problem;
@@ -171,15 +172,26 @@ private:
 class AutoModel
 {
 public:
-  using model_category = double;
   AutoModel() = default;
   template<typename T>
   T function(double x, const T *const parameters) const
   {
     return exp(parameters[0] * x + parameters[1]);
   }
+
 private:
   std::unique_ptr<ParametersBase> parameters_;
+};
+
+class AutoModelGauss
+{
+public:
+  AutoModelGauss() = default;
+  template<typename T>
+  T function(double x, const T *const parameters) const
+  {
+    return parameters[0] * sin(x * parameters[3] + parameters[2]) * exp(-x * x * parameters[1]);
+  }
 };
 
 class AutoResidual
@@ -198,6 +210,7 @@ private:
   const double y_;
   AutoModel model;
 };
+
 // clang-format on
 struct ExponentialResidual
 {
@@ -213,31 +226,68 @@ private:
   const double x_;
   const double y_;
 };
-
-
-int
-  main(int argc, char **argv)
+// clang-format on
+struct NormalAutoResidual
 {
-  google::InitGoogleLogging(argv[0]);
+  NormalAutoResidual(double x, double y, double eps) : x_(x), y_(y), eps_(eps) {}
+  template<typename T>
+  bool operator()(const T *const parameters, T *residual) const
+  {
+    residual[0] = (y_ - model.function(x_, parameters)) / eps_;
+    return true;
+  }
+
+private:
+  const double x_;
+  const double y_;
+  const double eps_;
+  AutoModelGauss model;
+};
+
+
+void gaussProblem()
+{
+
+  double parameters[] = { 10, 0.007, 0.2, 3 };
+  Problem problem;
+  for (int i = 0; i < numGaussObservations; ++i) {
+    problem.AddResidualBlock(
+      new AutoDiffCostFunction<NormalAutoResidual, 1, 4>(
+        new NormalAutoResidual(gaussData[3 * i], gaussData[3 * i + 1], gaussData[3 * i + 2])),
+      NULL,
+      parameters);
+  }
+  Solver::Options options;
+  options.max_num_iterations = 100;
+  options.linear_solver_type = ceres::DENSE_QR;
+  options.minimizer_progress_to_stdout = true;
+  Solver::Summary summary;
+  Solve(options, &problem, &summary);
+  std::cout << summary.BriefReport() << "\n";
+  std::cout << "Paramters are: "
+            << "Amp:" << parameters[0] << "\n"
+            << "decay: " << parameters[1] << "\n "
+            << "phase: " << parameters[2] << "\n"
+            << "Frequency: " << parameters[3] << "\n";
+  //expect from lm fit
+  //    amp:        7.75413024 +/- 0.14691892 (1.89%) (init = 10)
+  //  decay:      0.01046706 +/- 2.6689e-04 (2.55%) (init = 0.007)
+  //  phase:      0.65216015 +/- 0.01395827 (2.14%) (init = 0.2)
+  //  frequency:  2.85913672 +/- 0.00116664 (0.04%) (init = 3)
+}
+
+void testProblem()
+{
   double m = 0.0;
-  double c[] = { 0, 1 };
   double c0 = 0;
-  Problem problem1;
+  Problem problem;
   for (int i = 0; i < kNumObservations; ++i) {
-    problem1.AddResidualBlock(
+    problem.AddResidualBlock(
       new AutoDiffCostFunction<ExponentialResidual, 1, 1, 1>(
         new ExponentialResidual(data[2 * i], data[2 * i + 1])),
       NULL,
       &m,
       &c0);
-  }
-  Problem problem;
-  for (int i = 0; i < kNumObservations; ++i) {
-    problem.AddResidualBlock(
-      new AutoDiffCostFunction<AutoResidual, 1, 2>(
-        new AutoResidual(data[2 * i], data[2 * i + 1]), ceres::TAKE_OWNERSHIP),
-      NULL,
-      c);
   }
   Solver::Options options;
   options.max_num_iterations = 25;
@@ -246,10 +296,13 @@ int
   Solver::Summary summary;
   Solve(options, &problem, &summary);
   std::cout << summary.BriefReport() << "\n";
-  Solve(options, &problem1, &summary);
-  std::cout << summary.BriefReport() << "\n";
   std::cout << "Initial m: " << 0.0 << " c: " << 0.0 << "\n";
-  std::cout << "Final   m: " << c[0] << " c: " << c[1] << "\n";
-  std::cout << "Final   m: " << m << " c: " << c0 << "\n";
+}
+
+int main(int argc, char **argv)
+{
+  google::InitGoogleLogging(argv[0]);
+  // testProblem();
+  gaussProblem();
   return 0;
 }
